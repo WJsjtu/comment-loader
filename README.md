@@ -1,6 +1,9 @@
 # comment-loader
 A wepback loader using comment to do precompilation work.
 
+###Install
+`npm install --save-dev comment-loader`
+
 ###Why we need it?
 Conditional code is not allowed in ES6+, this means you cannot use `if-else` or `switch-case` structure to enable/disable some modules.
 However if some precompilation work can be performed before webpack pass your code to babel or other ES transformers, the problem can be solved easily.
