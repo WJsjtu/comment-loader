@@ -1,6 +1,6 @@
 {
   "name": "comment-loader",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A wepback loader using comment to do precompilation work.",
   "main": "index.js",
   "license": "MIT",

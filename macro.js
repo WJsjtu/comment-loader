@@ -2,6 +2,7 @@ var loaderUtils = require("loader-utils");
 var assign = require("object-assign");
 
 var warning = require("./utils/warning");
+var error = require("./utils/error");
 var parse = require("./utils/parse");
 
 /**
@@ -57,7 +58,7 @@ module.exports = function (callback, source, inputSourceMap) {
     });
 
 
-    var ifdefArray = [], elseArray = [], endifArray = [];
+    var commentArray = [];
 
     comments.forEach(function (comment) {
 
@@ -65,92 +66,104 @@ module.exports = function (callback, source, inputSourceMap) {
         var elseReg = new RegExp("^\\s*<\\s*" + regEscape(options._ELSE) + "\\s*>\\s*$", "g");
         var endifReg = new RegExp("^\\s*<\\s*" + regEscape(options._ENDIF) + "\\s*>\\s*$", "g");
 
-        if (comment.value.match(ifdefReg)) ifdefArray.push(comment);
-        if (comment.value.match(elseReg)) elseArray.push(comment);
-        if (comment.value.match(endifReg)) endifArray.push(comment);
+        if (comment.value.match(ifdefReg)) commentArray.push({comment: comment, type: "if"});
+        if (comment.value.match(elseReg)) commentArray.push({comment: comment, type: "else"});
+        if (comment.value.match(endifReg)) commentArray.push({comment: comment, type: "end"});
     });
 
-    ifdefArray.sort(function (a, b) {
-        return a.start - b.start;
+    commentArray.sort(function (a, b) {
+        return a.comment.start - b.comment.start;
     });
-    elseArray.sort(function (a, b) {
-        return a.start - b.start;
-    });
-    endifArray.sort(function (a, b) {
-        return a.start - b.start;
-    });
-
 
     var buffer = new Buffer(source, options.encoding);
 
     var result = (function () {
 
-        var iIf = 0, iElse = 0, iEnd = 0;
 
-        for (var l = ifdefArray.length; iIf < l; iIf++) {
+        var length = commentArray.length;
 
-            var ifComment = ifdefArray[iIf];
+        if (!length) return true;
 
-            if (iEnd >= endifArray.length) {
-                warning("The define macro cannot match the ending macro!", filename, ifComment.loc);
-                return false;
+        var current = 0, currentNode, currentType;
+
+        /**
+         * Get first if macro.
+         */
+        while (current < length) {
+            currentNode = commentArray[current].comment;
+            currentType = commentArray[current].type;
+            if (currentType !== "if") {
+                warning("The if marco is in the wrong position!", filename, currentNode.loc);
+                current++;
+                continue;
             }
+            break;
+        }
 
-            var endComment = endifArray[iEnd++];
+        var stack = [];
 
-            while (endComment.start < ifComment.start) {
-                warning("The ending marco is in the wrong position!", filename, endComment.loc);
-                if (iEnd < endifArray.length) {
-                    endComment = endifArray[iEnd++];
+        while (current < length) {
+
+            currentNode = commentArray[current].comment;
+            currentType = commentArray[current].type;
+
+            if (currentType == "if") {
+                stack.push(commentArray[current]);
+                current++;
+                continue;
+            } else if (currentType == "end") {
+
+                if (!stack.length) {
+                    warning("The end marco is in the wrong position!", filename, currentNode.loc);
+                    current++;
                     continue;
                 } else {
-                    warning("The define macro cannot match the ending macro!", filename, ifComment.loc);
-                    return false;
-                }
-            }
+                    var ifComment = stack.pop(), elseComment;
 
-            var defName = (
-                (new RegExp("^\\s*<\\s*" + regEscape(options._IFDEF) + "\\s+([^>]*)\\s*>\\s*$", "g")).exec(
-                    ifComment.value
-                )
-            )[1];
-
-            if (iElse < elseArray.length) {
-
-                var elseComment = elseArray[iElse++];
-
-                while (elseComment.start < ifComment.start) {
-                    warning("The else marco is in the wrong position!", filename, elseComment.loc);
-                    if (iElse < elseArray.length) {
-                        elseComment = elseArray[iElse++];
-                        continue;
-                    } else {
-                        elseComment = undefined;
-                        break;
+                    if (ifComment.type == "else") {
+                        elseComment = ifComment;
+                        ifComment = stack.pop();
                     }
-                }
 
-                if (elseComment && elseComment.start < endComment.start) {
+                    var defName = (
+                        (new RegExp("^\\s*<\\s*" + regEscape(options._IFDEF) + "\\s+([^>]*)\\s*>\\s*$", "g")).exec(
+                            ifComment.comment.value
+                        )
+                    )[1];
+
                     if (options.definition.indexOf(defName) < 0) {
-                        buffer.fill(" ", elseComment.end, endComment.start - 1, options.encoding);
+                        if (elseComment) {
+                            buffer.fill(" ", ifComment.comment.end, elseComment.comment.start - 1, options.encoding);
+                        } else {
+                            buffer.fill(" ", ifComment.comment.end, currentNode.start - 1, options.encoding);
+                        }
+
                     } else {
-                        buffer.fill(" ", ifComment.end, elseComment.start - 1, options.encoding);
+                        if (elseComment) {
+                            buffer.fill(" ", elseComment.comment.end, currentNode.start - 1, options.encoding);
+                        }
                     }
+                    current++;
+                    continue;
+                }
+            } else if (currentType == "else") {
+                if (!stack.length) {
+                    warning("The else marco is in the wrong position!", filename, currentNode.loc);
+                    current++;
+                    continue;
                 } else {
-                    if (options.definition.indexOf(defName) < 0) {
-                        buffer.fill(" ", ifComment.end, endComment.start - 1, options.encoding);
+                    var lastComment = stack[stack.length - 1];
+                    if (lastComment.type != "if") {
+                        error("The else marco is in the wrong position!", filename, currentNode.loc);
+                        return false;
+                    } else {
+                        stack.push(commentArray[current]);
+                        current++;
+                        continue;
                     }
                 }
-
-            } else {
-                if (options.definition.indexOf(defName) < 0) {
-                    buffer.fill(" ", ifComment.end, endComment.start - 1, options.encoding);
-                }
             }
 
-            if (iElse < elseArray.length) {
-                warning("Several else marcos are in the wrong position!", filename);
-            }
         }
 
         return true;
@@ -159,7 +172,7 @@ module.exports = function (callback, source, inputSourceMap) {
 
     callback(
         null,
-        (result === false || !ifdefArray.length) ? source : buffer.toString(options.encoding),
+        result === false ? source : buffer.toString(options.encoding),
         inputSourceMap
     );
 };
