@@ -52,11 +52,9 @@ module.exports = function (callback, source, inputSourceMap) {
         return;
     }
 
-
     var comments = parseResult.comments.filter(function (commentNode) {
         return commentNode.type == "CommentLine";
     });
-
 
     var commentArray = [];
 
@@ -79,21 +77,17 @@ module.exports = function (callback, source, inputSourceMap) {
 
     var result = (function () {
 
-
         var length = commentArray.length;
 
         if (!length) return true;
 
         var current = 0, currentNode, currentType;
 
-        /**
-         * Get first if macro.
-         */
         while (current < length) {
             currentNode = commentArray[current].comment;
             currentType = commentArray[current].type;
             if (currentType !== "if") {
-                warning("The if marco is in the wrong position!", filename, currentNode.loc);
+                warning("The " + currentType + " marco is in the wrong position!", filename, currentNode.loc);
                 current++;
                 continue;
             }
@@ -146,6 +140,7 @@ module.exports = function (callback, source, inputSourceMap) {
                     current++;
                     continue;
                 }
+
             } else if (currentType == "else") {
                 if (!stack.length) {
                     warning("The else marco is in the wrong position!", filename, currentNode.loc);
@@ -164,6 +159,12 @@ module.exports = function (callback, source, inputSourceMap) {
                 }
             }
 
+        }
+
+        if (stack.length) {
+            stack.forEach(function (_ifComment) {
+                warning("The if marco is in the wrong position!", filename, _ifComment.comment.loc);
+            });
         }
 
         return true;
