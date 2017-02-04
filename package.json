@@ -1,0 +1,28 @@
+{
+  "name": "comment-loader",
+  "version": "0.0.1",
+  "description": "A wepback loader using comment to do precompilation work.",
+  "main": "index.js",
+  "files": [
+    "*"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "babylon": "^6.15.0",
+    "cli-color": "^1.1.0",
+    "loader-utils": "^0.2.16",
+    "object-assign": "^4.1.1"
+  },
+  "author": {
+    "name": "王健（Jason Wang）",
+    "email": "jasonwang0421@gmail.com",
+    "url": "http://github.com/wjsjtu"
+  },
+  "homepage": "http://wjsjtu.github.io/comment-loader/",
+  "keywords": [
+    "webpack",
+    "precompile",
+    "macro",
+    "loader"
+  ]
+}
